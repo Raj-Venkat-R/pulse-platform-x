@@ -1,73 +1,247 @@
-# Welcome to your Lovable project
+# Unified Digital Registration & Appointment Scheduler API
 
-## Project info
+A comprehensive Node.js/Express API for managing healthcare appointments, queue management, and offline synchronization.
 
-**URL**: https://lovable.dev/projects/fbdd37aa-6379-4234-8417-e3cb1889d031
+## Features
 
-## How can I edit this code?
+- **Appointment Booking**: Online and offline appointment scheduling
+- **Availability Management**: Real-time availability checking
+- **Queue Management**: Walk-in token generation and queue tracking
+- **Offline Sync**: Support for offline devices and kiosks
+- **Reminder System**: Automated email/SMS reminders
+- **Multi-location Support**: Handle multiple hospital locations and services
 
-There are several ways of editing your application.
+## Installation
 
-**Use Lovable**
+1. Install dependencies:
+```bash
+npm install
+```
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/fbdd37aa-6379-4234-8417-e3cb1889d031) and start prompting.
+2. Set up environment variables:
+```bash
+cp env.example .env
+# Edit .env with your database and service credentials
+```
 
-Changes made via Lovable will be committed automatically to this repo.
+3. Run database migrations:
+```bash
+npm run migrate
+```
 
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+4. Start the server:
+```bash
+npm start
+# or for development
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+## API Endpoints
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Appointments
 
-**Use GitHub Codespaces**
+#### POST /api/appointments
+Book a new appointment (online or offline)
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+**Request Body:**
+```json
+{
+  "patient_id": 123,
+  "provider_id": 456,
+  "service_id": 789,
+  "location_id": 101,
+  "availability_slot_id": 202,
+  "scheduled_start": "2025-10-25T10:00:00Z",
+  "scheduled_end": "2025-10-25T10:30:00Z",
+  "appointment_type": "online",
+  "source": "web",
+  "reason": "Annual checkup",
+  "notes": "Patient prefers morning appointments"
+}
+```
 
-## What technologies are used for this project?
+#### GET /api/appointments/availability
+Check available slots for a given date and service
 
-This project is built with:
+**Query Parameters:**
+- `date` (required): Date in ISO format
+- `service_id` (optional): Filter by service
+- `location_id` (optional): Filter by location
+- `provider_id` (optional): Filter by provider
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+**Example:**
+```
+GET /api/appointments/availability?date=2025-10-25&service_id=789&location_id=101
+```
 
-## How can I deploy this project?
+#### POST /api/appointments/offline
+Store an offline appointment (to be synced later)
 
-Simply open [Lovable](https://lovable.dev/projects/fbdd37aa-6379-4234-8417-e3cb1889d031) and click on Share -> Publish.
+**Request Body:**
+```json
+{
+  "patient_id": 123,
+  "provider_id": 456,
+  "service_id": 789,
+  "location_id": 101,
+  "scheduled_start": "2025-10-25T10:00:00Z",
+  "scheduled_end": "2025-10-25T10:30:00Z",
+  "reason": "Emergency consultation"
+}
+```
 
-## Can I connect a custom domain to my Lovable project?
+#### PUT /api/appointments/:id/status
+Update appointment status
 
-Yes, you can!
+**Request Body:**
+```json
+{
+  "status": "confirmed",
+  "notes": "Patient confirmed via phone"
+}
+```
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+**Valid statuses:** `scheduled`, `confirmed`, `checked_in`, `completed`, `cancelled`, `no_show`, `rescheduled`
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+### Queue Management
+
+#### GET /api/appointments/queue
+Get current queue for a given date and location
+
+**Query Parameters:**
+- `date` (optional): Date in ISO format (defaults to today)
+- `location_id` (optional): Filter by location
+- `service_id` (optional): Filter by service
+
+#### POST /api/appointments/queue
+Generate a walk-in token
+
+**Request Body:**
+```json
+{
+  "location_id": 101,
+  "service_id": 789,
+  "provider_id": 456,
+  "patient_id": 123,
+  "channel": "walk_in",
+  "priority": 0,
+  "notes": "Patient has high fever"
+}
+```
+
+### Offline Sync
+
+#### GET /api/appointments/sync
+Get sync data for offline devices
+
+**Query Parameters:**
+- `device_id` (optional): Device identifier
+- `last_sync` (optional): Last sync timestamp
+
+#### POST /api/appointments/sync
+Submit offline appointments for synchronization
+
+**Request Body:**
+```json
+{
+  "sync_logs": [
+    {
+      "id": 1,
+      "entity_type": "appointment",
+      "operation": "create",
+      "payload": {
+        "patient_id": 123,
+        "provider_id": 456,
+        "scheduled_start": "2025-10-25T10:00:00Z",
+        "scheduled_end": "2025-10-25T10:30:00Z"
+      }
+    }
+  ]
+}
+```
+
+## Background Jobs
+
+### Reminder System
+
+The API includes a background job that runs every 5 minutes to process appointment reminders:
+
+- **24 hours before**: Email reminder
+- **2 hours before**: SMS reminder  
+- **30 minutes before**: SMS reminder
+
+Reminders are automatically scheduled when appointments are confirmed and cancelled when appointments are cancelled.
+
+## Database Schema
+
+The API uses the following main tables:
+
+- `appointments`: Core appointment data
+- `appointment_reminders`: Scheduled reminders
+- `queue_tokens`: Walk-in queue management
+- `availability_slots`: Provider availability
+- `offline_sync_logs`: Offline synchronization tracking
+- `locations`: Hospital locations
+- `services`: Clinical services/specialties
+
+## Error Handling
+
+All endpoints return consistent error responses:
+
+```json
+{
+  "success": false,
+  "message": "Error description",
+  "errors": [] // Validation errors if applicable
+}
+```
+
+## Authentication
+
+The API expects authentication middleware (`requireAuth`) to be applied. The authenticated user is available in `req.user` with the following properties:
+
+- `id`: User ID
+- `location_id`: User's assigned location
+- Other user properties as needed
+
+## Environment Variables
+
+Required environment variables:
+
+- `DATABASE_URL`: PostgreSQL connection string
+- `PORT`: Server port (default: 3000)
+- `NODE_ENV`: Environment (development/production)
+
+Optional service integrations:
+
+- `SENDGRID_API_KEY`: For email reminders
+- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`: For SMS reminders
+- `FIREBASE_SERVER_KEY`: For push notifications
+
+## Development
+
+```bash
+# Install dependencies
+npm install
+
+# Run in development mode with auto-reload
+npm run dev
+
+# Run tests
+npm test
+
+# Run database migrations
+npm run migrate
+```
+
+## Production Deployment
+
+1. Set `NODE_ENV=production`
+2. Configure production database URL
+3. Set up service API keys for email/SMS
+4. Use a process manager like PM2
+5. Set up monitoring and logging
+
+## License
+
+MIT

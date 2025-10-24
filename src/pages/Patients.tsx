@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { UserPlus, Search, Users } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { addPatientFirestore, listPatientsFirestore, searchPatientsFirestore } from "@/lib/firebase";
+
+type Patient = {
+  id: string | number;
+  first_name?: string;
+  last_name?: string;
+  name?: string;
+  age?: number;
+  gender?: string;
+  phone?: string;
+  email?: string;
+  date_of_birth?: string;
+  address?: string;
+  lastVisit?: string;
+  status?: string;
+};
 
 export default function Patients() {
   const { toast } = useToast();
@@ -27,35 +43,73 @@ export default function Patients() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    toast({
-      title: "Patient Registered Successfully",
-      description: `${formData.firstName} ${formData.lastName} has been added to the system.`,
-    });
-    setShowRegistrationForm(false);
-    setFormData({
-      firstName: "",
-      lastName: "",
-      dateOfBirth: "",
-      gender: "",
-      phone: "",
-      email: "",
-      address: "",
-      emergencyContact: "",
-      bloodGroup: "",
-    });
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchPatients = async (query = "") => {
+    try {
+      setLoading(true);
+      const list = query ? await searchPatientsFirestore(query) : await listPatientsFirestore();
+      setPatients(list);
+    } catch (err) {
+      console.error("Failed to fetch patients", err);
+      toast({ title: "Failed to load patients", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const recentPatients = [
-    { id: "P001", name: "John Doe", age: 45, gender: "Male", lastVisit: "2025-10-22", status: "Active" },
-    { id: "P002", name: "Sarah Smith", age: 32, gender: "Female", lastVisit: "2025-10-21", status: "Active" },
-    { id: "P003", name: "Michael Brown", age: 58, gender: "Male", lastVisit: "2025-10-20", status: "Discharged" },
-    { id: "P004", name: "Emma Wilson", age: 27, gender: "Female", lastVisit: "2025-10-22", status: "Active" },
-  ];
+  useEffect(() => {
+    fetchPatients("");
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      const payload = {
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        date_of_birth: formData.dateOfBirth,
+        gender: formData.gender,
+        phone: formData.phone,
+        email: formData.email,
+        address: formData.address,
+        emergency_contact: formData.emergencyContact,
+        blood_group: formData.bloodGroup,
+      };
+      await addPatientFirestore(payload);
+      {
+        toast({
+          title: "Patient Registered Successfully",
+          description: `${formData.firstName} ${formData.lastName} has been added to the system.`,
+        });
+        setShowRegistrationForm(false);
+        setFormData({
+          firstName: "",
+          lastName: "",
+          dateOfBirth: "",
+          gender: "",
+          phone: "",
+          email: "",
+          address: "",
+          emergencyContact: "",
+          bloodGroup: "",
+        });
+        // refresh list
+        fetchPatients("");
+      }
+    } catch (err: any) {
+      console.error("Create patient failed", err);
+      toast({ title: "Failed to create patient", description: String(err?.message || err), variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+  const recentPatients = patients;
 
   return (
-    <div className="container mx-auto px-4 py-8 space-y-6">
+    <div className="w-full px-2 md:px-4 py-8 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -185,7 +239,10 @@ export default function Patients() {
                 <Button type="button" variant="outline" onClick={() => setShowRegistrationForm(false)}>
                   Cancel
                 </Button>
-                <Button type="submit">Register Patient</Button>
+                <Button type="submit" disabled={loading} className="gap-2">
+                  {loading && <span className="inline-block h-4 w-4 border-2 border-current border-r-transparent rounded-full animate-spin" />}
+                  Register Patient
+                </Button>
               </div>
             </form>
           </CardContent>
@@ -205,9 +262,10 @@ export default function Patients() {
                   <Input
                     placeholder="Search by name, ID, or phone..."
                     className="pl-10"
+                    onKeyDown={(e)=>{ if(e.key==='Enter'){ const target=e.target as HTMLInputElement; fetchPatients(target.value); } }}
                   />
                 </div>
-                <Button>Search</Button>
+                <Button onClick={() => fetchPatients("")}>Refresh</Button>
               </div>
             </CardContent>
           </Card>
@@ -219,31 +277,37 @@ export default function Patients() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {recentPatients.map((patient) => (
+                {loading && <div className="text-sm text-muted-foreground">Loading patients...</div>}
+                {!loading && recentPatients.length === 0 && (
+                  <div className="text-sm text-muted-foreground">No patients found.</div>
+                )}
+                {!loading && recentPatients.map((patient) => (
                   <div
-                    key={patient.id}
-                    className="flex items-center justify-between p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors"
+                     key={patient.id}
+                     className="flex items-center justify-between p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors"
                   >
                     <div className="flex items-center gap-4">
                       <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
                         <span className="text-lg font-bold text-primary">
-                          {patient.name.split(" ").map(n => n[0]).join("")}
+                          {(
+                            (patient.first_name || "").charAt(0) + (patient.last_name || "").charAt(0)
+                          ) || (patient.name ? patient.name.split(" ").map(n=>n[0]).join("") : "P")}
                         </span>
                       </div>
                       <div>
-                        <p className="font-medium text-foreground">{patient.name}</p>
+                        <p className="font-medium text-foreground">{patient.name || `${patient.first_name ?? ""} ${patient.last_name ?? ""}`.trim()}</p>
                         <p className="text-sm text-muted-foreground">
-                          ID: {patient.id} • {patient.age} years • {patient.gender}
+                          ID: {patient.id}{patient.age ? ` • ${patient.age} years` : ""} • {patient.gender || ""}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="text-right">
                         <p className="text-sm text-muted-foreground">Last Visit</p>
-                        <p className="text-sm font-medium">{patient.lastVisit}</p>
+                        <p className="text-sm font-medium">{patient.lastVisit || "—"}</p>
                       </div>
                       <Badge variant={patient.status === "Active" ? "default" : "secondary"}>
-                        {patient.status}
+                        {patient.status || "Active"}
                       </Badge>
                       <Button variant="outline" size="sm">View Details</Button>
                     </div>

@@ -1,16 +1,19 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Calendar, Clock, CalendarPlus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { addAppointmentFirestore, listAppointmentsFirestore } from "@/lib/firebase";
 
 export default function Appointments() {
   const { toast } = useToast();
   const [showScheduleForm, setShowScheduleForm] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     patientId: "",
     patientName: "",
@@ -25,34 +28,68 @@ export default function Appointments() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    toast({
-      title: "Appointment Scheduled",
-      description: `Appointment for ${formData.patientName} on ${formData.date} at ${formData.time}`,
-    });
-    setShowScheduleForm(false);
-    setFormData({
-      patientId: "",
-      patientName: "",
-      department: "",
-      doctor: "",
-      date: "",
-      time: "",
-      reason: "",
-    });
+  const [appointments, setAppointments] = useState<any[]>([]);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [selectedAppt, setSelectedAppt] = useState<any | null>(null);
+
+  const loadAppointments = async () => {
+    try {
+      setLoading(true);
+      const items = await listAppointmentsFirestore();
+      setAppointments(items);
+    } catch (err) {
+      console.error("Failed to load appointments", err);
+      toast({ title: "Failed to load appointments", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const todayAppointments = [
-    { id: 1, time: "09:00 AM", patient: "John Doe", doctor: "Dr. Smith", department: "Cardiology", status: "confirmed" },
-    { id: 2, time: "10:30 AM", patient: "Sarah Johnson", doctor: "Dr. Patel", department: "Orthopedics", status: "pending" },
-    { id: 3, time: "11:00 AM", patient: "Michael Brown", doctor: "Dr. Lee", department: "Neurology", status: "confirmed" },
-    { id: 4, time: "02:00 PM", patient: "Emma Wilson", doctor: "Dr. Smith", department: "Cardiology", status: "completed" },
-    { id: 5, time: "03:30 PM", patient: "David Chen", doctor: "Dr. Garcia", department: "Pediatrics", status: "pending" },
-  ];
+  useEffect(() => {
+    loadAppointments();
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      await addAppointmentFirestore({
+        patient_id: formData.patientId,
+        patient_name: formData.patientName,
+        department: formData.department,
+        doctor: formData.doctor,
+        date: formData.date,
+        time: formData.time,
+        reason: formData.reason,
+        status: "confirmed",
+      });
+      toast({
+        title: "Appointment Scheduled",
+        description: `Appointment for ${formData.patientName} on ${formData.date} at ${formData.time}`,
+      });
+      setShowScheduleForm(false);
+      setFormData({
+        patientId: "",
+        patientName: "",
+        department: "",
+        doctor: "",
+        date: "",
+        time: "",
+        reason: "",
+      });
+      loadAppointments();
+    } catch (err) {
+      console.error("Failed to schedule appointment", err);
+      toast({ title: "Failed to schedule appointment", description: String((err as any)?.message || err), variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const todayAppointments = appointments;
 
   return (
-    <div className="container mx-auto px-4 py-8 space-y-6">
+    <div className="w-full px-2 md:px-4 py-8 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -163,7 +200,10 @@ export default function Appointments() {
                 <Button type="button" variant="outline" onClick={() => setShowScheduleForm(false)}>
                   Cancel
                 </Button>
-                <Button type="submit">Schedule Appointment</Button>
+                <Button type="submit" disabled={loading} className="gap-2">
+                  {loading && <span className="inline-block h-4 w-4 border-2 border-current border-r-transparent rounded-full animate-spin" />}
+                  Schedule Appointment
+                </Button>
               </div>
             </form>
           </CardContent>
@@ -180,7 +220,11 @@ export default function Appointments() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {todayAppointments.map((appointment) => (
+              {loading && <div className="text-sm text-muted-foreground">Loading appointments...</div>}
+              {!loading && todayAppointments.length === 0 && (
+                <div className="text-sm text-muted-foreground">No appointments found.</div>
+              )}
+              {!loading && todayAppointments.map((appointment) => (
                 <div
                   key={appointment.id}
                   className="flex items-center justify-between p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors"
@@ -190,7 +234,7 @@ export default function Appointments() {
                       <Clock className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                      <p className="font-medium text-foreground">{appointment.patient}</p>
+                      <p className="font-medium text-foreground">{appointment.patient_name}</p>
                       <p className="text-sm text-muted-foreground">
                         {appointment.doctor} • {appointment.department}
                       </p>
@@ -209,9 +253,18 @@ export default function Appointments() {
                           : "outline"
                       }
                     >
-                      {appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
+                      {String(appointment.status || "").charAt(0).toUpperCase() + String(appointment.status || "").slice(1)}
                     </Badge>
-                    <Button variant="outline" size="sm">Details</Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedAppt(appointment);
+                        setDetailsOpen(true);
+                      }}
+                    >
+                      Details
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -219,6 +272,64 @@ export default function Appointments() {
           </CardContent>
         </Card>
       )}
+
+      {/* Details Modal */}
+      <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Appointment Details</DialogTitle>
+            <DialogDescription>Full information for the selected appointment</DialogDescription>
+          </DialogHeader>
+          {selectedAppt && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Patient</p>
+                  <p className="font-medium">{selectedAppt.patient_name}</p>
+                </div>
+                <Badge>{String(selectedAppt.status || "").charAt(0).toUpperCase() + String(selectedAppt.status || "").slice(1)}</Badge>
+              </div>
+
+              {selectedAppt.patient_id && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Patient ID</p>
+                  <p className="font-mono text-sm">{selectedAppt.patient_id}</p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-sm text-muted-foreground">Department</p>
+                  <p className="font-medium">{selectedAppt.department}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Doctor</p>
+                  <p className="font-medium">{selectedAppt.doctor}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Date</p>
+                  <p className="font-medium">{selectedAppt.date}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Time</p>
+                  <p className="font-medium">{selectedAppt.time}</p>
+                </div>
+              </div>
+
+              {selectedAppt.reason && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Reason</p>
+                  <p className="font-medium">{selectedAppt.reason}</p>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setDetailsOpen(false)}>Close</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

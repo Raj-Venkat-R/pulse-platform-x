@@ -1,7 +1,12 @@
 import { StatCard } from "@/components/StatCard";
+import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { addDoctorFirestore } from "@/lib/firebase";
 import { 
   Users, 
   Calendar, 
@@ -39,8 +44,32 @@ const quickActions = [
 ];
 
 export default function Dashboard() {
+  const { toast } = useToast();
+  const [docName, setDocName] = useState("");
+  const [docSpec, setDocSpec] = useState("");
+  const [adding, setAdding] = useState(false);
+
+  const addDoctor = async () => {
+    if (!docName.trim() || !docSpec.trim()) {
+      toast({ title: "Please enter name and specialty", variant: "destructive" });
+      return;
+    }
+    try {
+      setAdding(true);
+      await addDoctorFirestore({ name: docName.trim(), specialty: docSpec.trim() });
+      toast({ title: "Doctor added" });
+      setDocName("");
+      setDocSpec("");
+    } catch (err) {
+      console.error(err);
+      toast({ title: "Failed to add doctor", description: String((err as any)?.message || err), variant: "destructive" });
+    } finally {
+      setAdding(false);
+    }
+  };
+
   return (
-    <div className="container mx-auto px-4 py-8 space-y-8">
+    <div className="w-full px-2 md:px-4 py-6 md:py-8 space-y-8">
       {/* Hero Section */}
       <div className="bg-gradient-to-r from-primary to-accent rounded-xl p-8 text-white shadow-lg">
         <div className="flex items-center justify-between">
@@ -109,6 +138,35 @@ export default function Dashboard() {
                 </Button>
               );
             })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Doctor Management (Quick Add) */}
+      <Card className="shadow-md">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Stethoscope className="h-5 w-5" />
+            Add Doctor
+          </CardTitle>
+          <CardDescription>Quickly add a doctor to use in booking</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+            <div className="space-y-2">
+              <Label htmlFor="doc-name">Name</Label>
+              <Input id="doc-name" placeholder="Dr. Smith" value={docName} onChange={(e)=>setDocName(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="doc-spec">Specialty</Label>
+              <Input id="doc-spec" placeholder="Cardiology" value={docSpec} onChange={(e)=>setDocSpec(e.target.value)} />
+            </div>
+            <div className="flex md:justify-end">
+              <Button onClick={addDoctor} disabled={adding} className="gap-2 h-10 md:h-[42px] mt-6 md:mt-0">
+                {adding && <span className="inline-block h-4 w-4 border-2 border-current border-r-transparent rounded-full animate-spin" />}
+                Save Doctor
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
