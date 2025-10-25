@@ -153,6 +153,9 @@ export type ComplaintDoc = {
   assigned_staff_name?: string | null;
   patient_name?: string;
   patient_phone?: string;
+  channel?: string;
+  reporter?: string;
+  slaMin?: number;
   created_at: any; // Timestamp
   sla_deadline?: string;
   sla_status?: 'on_track' | 'at_risk' | 'breached';
@@ -167,6 +170,11 @@ export async function addComplaintFirestore(data: Omit<ComplaintDoc, 'created_at
   const ref = collection(db, 'complaints');
   const docRef = await addDoc(ref, { ...data, created_at: Timestamp.now() });
   return docRef.id;
+}
+
+export async function updateComplaintFirestore(id: string, patch: Partial<ComplaintDoc>) {
+  const dref = doc(db, 'complaints', id);
+  await updateDoc(dref, { ...patch });
 }
 
 export function subscribeComplaintsFirestore(
@@ -239,4 +247,49 @@ export async function searchPatientsByPrefixFirestore(term: string, max: number 
   const qy = query(ref, orderBy('name'), startAt(t), endAt(t + '\uf8ff'), limit(max));
   const snap = await getDocs(qy);
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+// -------- Ambulance Dispatch & Alerts --------
+export type AmbulanceDispatchDoc = {
+  callId: string;
+  caller: string;
+  coords: { lat: number; lng: number };
+  severity: 'Low' | 'Moderate' | 'High' | 'Critical';
+  ambulance: string;
+  etaMin: number;
+  hospital: string;
+  status: 'Assigned' | 'Enroute' | 'Arrived' | 'Completed';
+  createdAt: any;
+  updatedAt: any;
+};
+
+export async function addAmbulanceDispatchFirestore(data: Omit<AmbulanceDispatchDoc, 'createdAt'|'updatedAt'>) {
+  const ref = collection(db, 'ambulance_dispatch');
+  const payload = { ...data, createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
+  const r = await addDoc(ref, payload);
+  return r.id;
+}
+
+export async function updateAmbulanceDispatchFirestore(id: string, patch: Partial<AmbulanceDispatchDoc>) {
+  const dref = doc(db, 'ambulance_dispatch', id);
+  await updateDoc(dref, { ...patch, updatedAt: serverTimestamp() });
+}
+
+export function subscribeAmbulanceDispatchesFirestore(cb: (items: any[]) => void) {
+  const ref = collection(db, 'ambulance_dispatch');
+  const qy = query(ref, orderBy('createdAt', 'desc'));
+  return onSnapshot(qy, (snap) => cb(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+}
+
+export type AlertDoc = {
+  message: string;
+  type: 'ETA' | 'Status' | 'Critical';
+  scope?: string; // e.g., ambulance_dispatch
+  createdAt: any;
+};
+
+export async function addAlertFirestore(data: Omit<AlertDoc, 'createdAt'>) {
+  const ref = collection(db, 'alerts');
+  const r = await addDoc(ref, { ...data, createdAt: serverTimestamp() });
+  return r.id;
 }

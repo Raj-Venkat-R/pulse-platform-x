@@ -17,7 +17,17 @@ import {
   Users2,
   WifiOff,
   AlertTriangle,
-  ClipboardList
+  ClipboardList,
+  Navigation,
+  Salad,
+  ChefHat,
+  Hand,
+  HeartPulse,
+  Heart,
+  BarChart3,
+  Briefcase,
+  Microscope,
+  Bot
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
@@ -33,7 +43,6 @@ const navItems = [
   { icon: CalendarPlus, label: "Book Appointment", path: "/appointment/book" },
   { icon: Users2, label: "Queue Display", path: "/appointment/queue" },
   { icon: AlertTriangle, label: "Complaints", path: "/complaints/dashboard" },
-  { icon: ClipboardList, label: "Submit Complaint", path: "/complaints/submit" },
   { icon: Activity, label: "Vitals", path: "/vitals" },
   { icon: AlertCircle, label: "Emergency", path: "/emergency" },
   { icon: Bed, label: "Bed Management", path: "/beds" },
@@ -41,6 +50,23 @@ const navItems = [
   { icon: FileText, label: "E-Prescription", path: "/e-prescription" },
   { icon: FileText, label: "Reports", path: "/reports" },
   { icon: FileText, label: "X-ray Analysis", path: "/ai/xray" },
+  { icon: FileText, label: "Diagnostics Hub", path: "/diagnostics/hub" },
+  { icon: FileText, label: "Medico-Legal (MLC)", path: "/legal/mlc" },
+  { icon: ClipboardList, label: "Complaint Tracker", path: "/complaints/tracker" },
+  { icon: Salad, label: "Diet & Nutrition", path: "/nutrition/diet" },
+  { icon: Navigation, label: "Ambulance Dispatch", path: "/ambulance/dispatch" },
+  { icon: ChefHat, label: "Kitchen & Food Service", path: "/kitchen/service" },
+  { icon: HeartPulse, label: "ICU Dashboard", path: "/icu/dashboard" },
+  { icon: Bed, label: "Ward Management", path: "/wards/management" },
+  { icon: Users, label: "Patient Porter", path: "/porter/system" },
+  { icon: FileText, label: "Discharge Automation", path: "/discharge/automation" },
+  { icon: Heart, label: "Transplant Cases", path: "/transplant/cases" },
+  { icon: BarChart3, label: "Operations & Quality", path: "/operations/quality" },
+  { icon: Briefcase, label: "Corporate & Claims", path: "/corporate/claims" },
+  { icon: Microscope, label: "Pharmacovigilance & ADR", path: "/pharma/adr" },
+  { icon: Bot, label: "AI NCD Chatbot", path: "/ai/ncd-chatbot" },
+  { icon: Activity, label: "Physiotherapy", path: "/physio/scheduling" },
+  { icon: Hand, label: "Occupational Therapy", path: "/rehab/ot" },
   { icon: Package2, label: "Pharmacy", path: "/pharmacy" },
   { icon: WifiOff, label: "Offline Sync", path: "/appointment/offline" },
 ];
@@ -63,11 +89,11 @@ export function Layout({ children }: LayoutProps) {
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-[85%] sm:max-w-sm">
+              <SheetContent side="left" className="w-[85%] sm:max-w-sm flex flex-col">
                 <SheetHeader>
                   <SheetTitle>Navigation</SheetTitle>
                 </SheetHeader>
-                <nav className="mt-4 flex flex-col gap-1">
+                <nav className="mt-4 flex flex-col gap-1 overflow-y-auto pr-1 h-[calc(100vh-8rem)]">
                   {navItems.map((item) => {
                     const Icon = item.icon;
                     return (
